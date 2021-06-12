@@ -288,7 +288,7 @@ private:
                                      rect.h/scale)))
       return;
 
-    bitmap.lockPixels();
+    bitmap.allocPixels();
     {
       NSGraphicsContext* gc = [NSGraphicsContext currentContext];
       CGContextRef cg = (CGContextRef)[gc graphicsPort];
@@ -305,7 +305,7 @@ private:
         CGImageRelease(img);
       }
     }
-    bitmap.unlockPixels();
+    bitmap.allocPixels();
   }
 
   SkiaDisplay* m_display;

@@ -126,28 +126,7 @@ public:
   }
 
   Surface* loadSurface(const char* filename) override {
-    base::FileHandle fp(base::open_file_with_exception(filename, "rb"));
-
-    SkAutoTDelete<SkCodec> codec(
-      SkCodec::NewFromStream(
-        new SkFILEStream(fp.get(), SkFILEStream::kCallerRetains_Ownership)));
-    if (!codec)
-      return nullptr;
-
-    SkImageInfo info = codec->getInfo()
-      .makeColorType(kN32_SkColorType)
-      .makeAlphaType(kPremul_SkAlphaType);
-    SkBitmap bm;
-    if (!bm.tryAllocPixels(info))
-      return nullptr;
-
-    const SkCodec::Result r = codec->getPixels(info, bm.getPixels(), bm.rowBytes());
-    if (r != SkCodec::kSuccess)
-      return nullptr;
-
-    SkiaSurface* sur = new SkiaSurface();
-    sur->swapBitmap(bm);
-    return sur;
+      return loadSurface(filename);
   }
 
   Surface* loadRgbaSurface(const char* filename) override {

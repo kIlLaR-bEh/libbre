@@ -20,11 +20,12 @@
 #include "SkImageInfo.h"
 #include "SkRegion.h"
 #include "SkSurface.h"
+#include "../private/SkColorData.h"
 
 namespace she {
 
 inline SkColor to_skia(gfx::Color c) {
-  return SkColorSetARGBInline(gfx::geta(c), gfx::getr(c), gfx::getg(c), gfx::getb(c));
+  return SkColorSetARGB(gfx::geta(c), gfx::getr(c), gfx::getg(c), gfx::getb(c));
 }
 
 inline SkIRect to_skia(const gfx::Rect& rc) {
@@ -124,37 +125,35 @@ public:
   void setDrawMode(DrawMode mode, int param) override {
     switch (mode) {
       case DrawMode::Solid:
-        m_paint.setXfermodeMode(SkXfermode::kSrcOver_Mode);
+        m_paint.setBlendMode(SkBlendMode::kSrcOver);
         m_paint.setShader(nullptr);
         break;
       case DrawMode::Xor:
-        m_paint.setXfermodeMode(SkXfermode::kXor_Mode);
+        m_paint.setBlendMode(SkBlendMode::kXor);
         m_paint.setShader(nullptr);
         break;
       case DrawMode::Checked: {
-        m_paint.setXfermodeMode(SkXfermode::kSrcOver_Mode);
+        m_paint.setBlendMode(SkBlendMode::kSrcOver);
         {
           SkBitmap bitmap;
           if (!bitmap.tryAllocPixels(SkImageInfo::MakeN32Premul(8, 8)))
             throw base::Exception("Cannot create temporary Skia surface");
 
           {
-            bitmap.lockPixels();
+            bitmap.allocPixels();
             SkPMColor bg = SkPreMultiplyARGB(255, 0, 0, 0);
             SkPMColor fg = SkPreMultiplyARGB(255, 255, 255, 255);
             int offset = 7 - (param & 7);
             for (int y=0; y<8; y++)
               for (int x=0; x<8; x++)
                 *bitmap.getAddr32(x, y) = (((x+y+offset)&7) < 4 ? fg: bg);
-            bitmap.unlockPixels();
+            bitmap.allocPixels();
           }
 
-          sk_sp<SkShader> shader(
-            SkShader::MakeBitmapShader(
-              bitmap,
-              SkShader::kRepeat_TileMode,
-              SkShader::kRepeat_TileMode));
-          m_paint.setShader(shader);
+            sk_sp<SkShader> shader(
+                    bitmap.makeShader(SkTileMode::kRepeat,
+                                SkTileMode::kRepeat));
+        m_paint.setShader(shader);
         }
         break;
       }
@@ -164,13 +163,13 @@ public:
   void lock() override {
     ASSERT(m_lock >= 0);
     if (m_lock++ == 0)
-      m_bitmap.lockPixels();
+      m_bitmap.allocPixels();
   }
 
   void unlock() override {
     ASSERT(m_lock > 0);
     if (--m_lock == 0)
-      m_bitmap.unlockPixels();
+      m_bitmap.allocPixels();
   }
 
   void applyScale(int scaleFactor) override {
@@ -184,7 +183,7 @@ public:
       throw base::Exception("Cannot create temporary Skia surface to change scale");
 
     SkPaint paint;
-    paint.setXfermodeMode(SkXfermode::kSrc_Mode);
+    paint.setBlendMode(SkBlendMode::kSrc);
 
     SkCanvas canvas(result);
     SkRect srcRect = SkRect::Make(SkIRect::MakeXYWH(0, 0, width(), height()));
@@ -382,7 +381,7 @@ public:
     SkRect dstRect = SkRect::Make(SkIRect::MakeXYWH(clip.dst.x, clip.dst.y, clip.size.w, clip.size.h));
 
     SkPaint paint;
-    paint.setXfermodeMode(SkXfermode::kSrc_Mode);
+    paint.setBlendMode(SkBlendMode::kSrc);
 
     m_canvas->drawBitmapRect(
       ((SkiaSurface*)src)->m_bitmap, srcRect, dstRect, &paint,
@@ -401,7 +400,7 @@ public:
     SkRect dstRect = SkRect::Make(SkIRect::MakeXYWH(clip.dst.x, clip.dst.y, clip.size.w, clip.size.h));
 
     SkPaint paint;
-    paint.setXfermodeMode(SkXfermode::kSrcOver_Mode);
+    paint.setBlendMode(SkBlendMode::kSrcOver);
 
     m_canvas->drawBitmapRect(
       ((SkiaSurface*)src)->m_bitmap, srcRect, dstRect, &paint,
@@ -417,7 +416,7 @@ public:
     SkRect dstRect = SkRect::Make(SkIRect::MakeXYWH(clip.dst.x, clip.dst.y, clip.size.w, clip.size.h));
 
     SkPaint paint;
-    paint.setXfermodeMode(SkXfermode::kSrcOver_Mode);
+    paint.setBlendMode(SkBlendMode::kSrcOver);
 
     if (gfx::geta(bg) > 0) {
       SkPaint paint;
@@ -426,9 +425,10 @@ public:
       m_canvas->drawRect(dstRect, paint);
     }
 
-    sk_sp<SkColorFilter> colorFilter(
-      SkColorFilter::MakeModeFilter(to_skia(fg), SkXfermode::kSrcIn_Mode));
-    paint.setColorFilter(colorFilter);
+      sk_sp<SkColorFilter> colorFilter(
+            SkColorFilters::Blend(to_skia(fg), SkBlendMode::kSrcIn));
+          paint.setColorFilter(colorFilter);
+
 
     m_canvas->drawBitmapRect(
       ((SkiaSurface*)src)->m_bitmap,
